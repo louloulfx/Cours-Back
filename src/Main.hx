@@ -133,10 +133,35 @@ class Main {
 			}
 			UserDataAccessor.fromToken(connection, req.session.token, result -> switch (result) {
 				case User(login):
-					UserDataAccessor.save(connection, login, req.body);
-					res.send(200, "OK");
+					UserDataAccessor.save(connection, login, req.body, result -> switch (result) {
+						case Result(_):
+							res.send(200, "OK");
+						case Error(err):
+							res.send(500, err);
+					});
 				case Missing:
-					res.send(400, 'Mauvais token');
+					res.send(401, 'Mauvais token');
+				case Error(err):
+					res.send(500, err);
+			});
+		});
+
+		server.post('/load', function(expressReq:Request, res:Response) {
+			var req:RequestData = cast(expressReq);
+			if (req.session.token == null) {
+				res.send(401, "Mauvais token");
+				return;
+			}
+			UserDataAccessor.fromToken(connection, req.session.token, result -> switch (result) {
+				case User(login):
+					UserDataAccessor.load(connection, login, result -> switch (result) {
+						case Result(data):
+							res.send(200, data);
+						case Error(err):
+							res.send(500, err);
+					});
+				case Missing:
+					res.send(401, 'Mauvais token');
 				case Error(err):
 					res.send(500, err);
 			});
