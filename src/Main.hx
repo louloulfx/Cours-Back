@@ -1,4 +1,3 @@
-import js.Cookie;
 import haxe.crypto.BCrypt;
 import db.UserDataAccessor;
 import js.Node;
@@ -35,6 +34,8 @@ class Main {
 	static var db(default, never):MySQL = Node.require("mysql");
 
 	static var sockets:List<WebSocket> = new List<WebSocket>();
+
+	static var tickets:Map<String, String> = new Map<String, String>();
 
 	static function main() {
 		Node.require('dotenv').config();
@@ -154,6 +155,24 @@ class Main {
 			});
 		});
 
+		server.get('/wsTicket', function(expressReq:Request, res:Response) {
+			var req:RequestData = cast(expressReq);
+			if (req.session.token == null) {
+				res.send(401, "Mauvais token");
+				return;
+			}
+			UserDataAccessor.fromToken(connection, req.session.token, result -> switch (result) {
+				case User(login):
+					var ticket = BCrypt.generateSalt(10, BCrypt.Revision2B);
+					tickets[ticket] = login;
+					res.send(200, ticket);
+				case Missing:
+					res.send(401, 'Mauvais token');
+				case Error(err):
+					res.send(500, err);
+			});
+		});
+
 		server.post('/subscribe', function(expressReq:Request, res:Response) {
 			var req:RequestSubscribe = cast(expressReq);
 
@@ -163,7 +182,6 @@ class Main {
 					// username and password and email must be provided
 					res.send(400, "Bad Request");
 				case {
-					id: id,
 					login: login,
 					password: password
 				}:
