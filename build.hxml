@@ -4,5 +4,6 @@
 -main Main 
 -js dist/main.js
 -lib crypto
+-lib hxnodejs-ws
 -debug
 --macro npm.Package.export("package.json")
