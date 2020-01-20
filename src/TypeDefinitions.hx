@@ -4,9 +4,14 @@ import js.npm.express.Request;
  * Application data model
  */
 typedef User = {
-	var id:Int;
 	var login:String;
 	var password:String;
+}
+
+typedef Token = {
+	var id:String;
+	var user_id:String;
+	var expiration:Date;
 }
 
 /**

@@ -1,3 +1,4 @@
+import js.Cookie;
 import haxe.crypto.BCrypt;
 import db.UserDataAccessor;
 import js.Node;
@@ -9,16 +10,16 @@ import js.npm.express.Session;
 import TypeDefinitions;
 
 extern class RequestWithSession extends Request {
-	public var session:{authenticated:Bool};
+	public var session:{token:String};
 }
 
 extern class RequestLogin extends RequestWithSession {
-	public var body:{login:String, password:String};
+	public var body:{login:String, password:String, id:String};
 }
 
 extern class RequestSubscribe extends RequestWithSession {
 	public var body:{
-		id:Int,
+		id:String,
 		login:String,
 		password:String
 	};
@@ -101,18 +102,24 @@ class Main {
 				case {login: login, password: password}
 					if (login == null || password == null):
 					// username and password must be provided
-					req.session.authenticated = false;
+					req.session.token = null;
 					res.send(400, "Bad Request");
-				case {login: login, password: password}:
+				case {login: login, password: password, id: id}:
 					UserDataAccessor.userExists(connection, login, password, result -> switch (result) {
 						case UserExistsResult.Error(err):
 							trace(err);
 							res.send(500, err.message);
 						case UserExistsResult.Yes:
-							req.session.authenticated = true;
-							res.send(200, "OK");
+							UserDataAccessor.createToken(connection, login, 0, createTokenResult -> switch createTokenResult {
+								case Right(token):
+									req.session.token = token;
+									res.send(200, "OK");
+								case Left(err):
+									trace(err);
+									res.send(500, err.message);
+							});
 						case UserExistsResult.Missing | UserExistsResult.WrongPassword:
-							req.session.authenticated = false;
+							req.session.token = null;
 							res.send(401, "Unauthorized");
 					});
 			}
@@ -120,7 +127,19 @@ class Main {
 
 		server.post('/save', function(expressReq:Request, res:Response) {
 			var req:RequestData = cast(expressReq);
-			res.send(200, req.body);
+			if (req.session.token == null) {
+				res.send(401, "Mauvais token");
+				return;
+			}
+			UserDataAccessor.fromToken(connection, req.session.token, result -> switch (result) {
+				case User(login):
+					UserDataAccessor.save(connection, login, req.body);
+					res.send(200, "OK");
+				case Missing:
+					res.send(400, 'Mauvais token');
+				case Error(err):
+					res.send(500, err);
+			});
 		});
 
 		/**
@@ -169,7 +188,6 @@ class Main {
 							res.send(500, "User already exists, please use another login");
 						case UserExistsResult.Missing:
 							UserDataAccessor.createUser(connection, {
-								id: id,
 								login: login,
 								password: password,
 							}, response -> switch (response) {
@@ -184,14 +202,26 @@ class Main {
 
 		server.post('/logout', function(expressReq:Request, res:Response) {
 			var req:RequestWithSession = cast(expressReq);
-			req.session.authenticated = false;
+			req.session.token = null;
 			res.send(200, "OK");
 			return;
 		});
 
 		server.get('/status', function(expressReq:Request, res:Response) {
 			var req:RequestWithSession = cast(expressReq);
-			res.send(200, req.session.authenticated ? "Authentifié" : "Visiteur");
+			trace(req.session.token);
+			if (req.session.token == null) {
+				res.send(200, "Visiteur");
+				return;
+			}
+			UserDataAccessor.fromToken(connection, req.session.token, result -> switch (result) {
+				case User(login):
+					res.send(200, "Bonjour " + login);
+				case Missing:
+					res.send(401, "Token invalide. Vous devez vous re-connecter.");
+				case Error(err):
+					res.send(500, err);
+			});
 		});
 
 		var port = 1337;

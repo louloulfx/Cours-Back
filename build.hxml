@@ -4,7 +4,5 @@
 -main Main 
 -js dist/main.js
 -lib crypto
--lib uuid
--lib hxprng
 -debug
 --macro npm.Package.export("package.json")
