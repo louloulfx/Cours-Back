@@ -1,3 +1,4 @@
+import js.npm.express.Cors;
 import haxe.crypto.BCrypt;
 import db.UserDataAccessor;
 import js.Node;
@@ -33,6 +34,8 @@ extern class RequestData extends RequestWithSession {
 class Main {
 	static var db(default, never):MySQL = Node.require("mysql");
 
+	static var cors = Node.require("cors");
+
 	static var sockets:List<WebSocket> = new List<WebSocket>();
 
 	static var tickets:Map<String, String> = new Map<String, String>();
@@ -51,6 +54,7 @@ class Main {
 
 		// Setup express server with middlewares
 		var server:Express = new js.npm.Express();
+		server.use(cors());
 		server.use(BodyParser.json({limit: '5mb', type: 'application/json'}));
 		server.use(new Session({
 			secret: 'shhhh, very secret',
